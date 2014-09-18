@@ -15,10 +15,26 @@
  */
 package org.springframework.data.mongodb.core.convert;
 
-import static org.hamcrest.Matchers.*;
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-import static org.springframework.data.mongodb.core.DBObjectTestUtils.*;
+import static org.hamcrest.Matchers.arrayWithSize;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.data.mongodb.core.DBObjectTestUtils.getAsDBObject;
+import static org.springframework.data.mongodb.core.DBObjectTestUtils.getTypedValue;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -83,6 +99,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
+import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DB;
 import com.mongodb.DBObject;
 import com.mongodb.DBRef;
@@ -1868,6 +1885,41 @@ public class MappingMongoConverterUnitTests {
 		verify(resolver, times(1)).resolveDbRef(Mockito.any(MongoPersistentProperty.class), Mockito.any(DBRef.class),
 				Mockito.any(DbRefResolverCallback.class), Mockito.any(DbRefProxyHandler.class));
 	}
+	
+	/**
+	 * @see DATAMONGO-1050
+	 */
+	@Test
+	public void writeShouldUseExplicitFieldnameForIdPropertyWhenAnnotated() {
+
+		RootForClassWithExplicitlyRenamedIdField source = new RootForClassWithExplicitlyRenamedIdField();
+		source.id = "root";
+		source.nested = new ClassWithExplicitlyRenamedField();
+		source.nested.id = "nested";
+
+		DBObject sink = new BasicDBObject();
+		converter.write(source, sink);
+
+		assertThat((String) sink.get("_id"), is("root"));
+		assertThat((DBObject) sink.get("nested"), is(new BasicDBObjectBuilder().add("id", "nested").get()));
+	}
+
+	/**
+	 * @see DATAMONGO-1050
+	 */
+	@Test
+	public void readShouldUseExplicitFieldnameForIdPropertyWhenAnnotated() {
+
+		DBObject source = new BasicDBObjectBuilder().add("_id", "root").add("nested", new BasicDBObject("id", "nested"))
+				.get();
+
+		RootForClassWithExplicitlyRenamedIdField sink = converter.read(RootForClassWithExplicitlyRenamedIdField.class,
+				source);
+
+		assertThat(sink.id, is("root"));
+		assertThat(sink.nested, notNullValue());
+		assertThat(sink.nested.id, is("nested"));
+	}
 
 	static class GenericType<T> {
 		T content;
@@ -2128,6 +2180,16 @@ public class MappingMongoConverterUnitTests {
 		public ClassWithIntId getDbRefProperty() {
 			return dbRefProperty;
 		}
+	}
 
+	static class RootForClassWithExplicitlyRenamedIdField {
+
+		@Id String id;
+		ClassWithExplicitlyRenamedField nested;
+	}
+
+	static class ClassWithExplicitlyRenamedField {
+
+		@Field("id") String id;
 	}
 }
