@@ -1885,7 +1885,7 @@ public class MappingMongoConverterUnitTests {
 		verify(resolver, times(1)).resolveDbRef(Mockito.any(MongoPersistentProperty.class), Mockito.any(DBRef.class),
 				Mockito.any(DbRefResolverCallback.class), Mockito.any(DbRefProxyHandler.class));
 	}
-	
+
 	/**
 	 * @see DATAMONGO-1050
 	 */
@@ -1893,15 +1893,15 @@ public class MappingMongoConverterUnitTests {
 	public void writeShouldUseExplicitFieldnameForIdPropertyWhenAnnotated() {
 
 		RootForClassWithExplicitlyRenamedIdField source = new RootForClassWithExplicitlyRenamedIdField();
-		source.id = "root";
+		source.id = "rootId";
 		source.nested = new ClassWithExplicitlyRenamedField();
-		source.nested.id = "nested";
+		source.nested.id = "nestedId";
 
 		DBObject sink = new BasicDBObject();
 		converter.write(source, sink);
 
-		assertThat((String) sink.get("_id"), is("root"));
-		assertThat((DBObject) sink.get("nested"), is(new BasicDBObjectBuilder().add("id", "nested").get()));
+		assertThat((String) sink.get("_id"), is("rootId"));
+		assertThat((DBObject) sink.get("nested"), is(new BasicDBObjectBuilder().add("id", "nestedId").get()));
 	}
 
 	/**
@@ -1910,15 +1910,55 @@ public class MappingMongoConverterUnitTests {
 	@Test
 	public void readShouldUseExplicitFieldnameForIdPropertyWhenAnnotated() {
 
-		DBObject source = new BasicDBObjectBuilder().add("_id", "root").add("nested", new BasicDBObject("id", "nested"))
-				.get();
+		DBObject source = new BasicDBObjectBuilder().add("_id", "rootId")
+				.add("nested", new BasicDBObject("id", "nestedId")).get();
 
 		RootForClassWithExplicitlyRenamedIdField sink = converter.read(RootForClassWithExplicitlyRenamedIdField.class,
 				source);
 
-		assertThat(sink.id, is("root"));
+		assertThat(sink.id, is("rootId"));
 		assertThat(sink.nested, notNullValue());
-		assertThat(sink.nested.id, is("nested"));
+		assertThat(sink.nested.id, is("nestedId"));
+	}
+
+	/**
+	 * @see DATAMONGO-1050
+	 */
+	@Test
+	public void namedIdFieldShouldExtractValueFromUnderscoreIdField() {
+
+		DBObject dbo = new BasicDBObjectBuilder().add("_id", "A").add("id", "B").get();
+
+		ClassWithNamedIdField withNamedIdField = converter.read(ClassWithNamedIdField.class, dbo);
+
+		assertThat(withNamedIdField.id, is("A"));
+	}
+	
+	/**
+	 * @see DATAMONGO-1050
+	 */
+	@Test
+	public void explicitlyRenamedIfFieldShouldExtractValueFromIdField() {
+
+		DBObject dbo = new BasicDBObjectBuilder().add("_id", "A").add("id", "B").get();
+
+		ClassWithExplicitlyRenamedField withExplicitlyRenamedField = converter.read(ClassWithExplicitlyRenamedField.class,
+				dbo);
+
+		assertThat(withExplicitlyRenamedField.id, is("B"));
+	}
+	
+	/**
+	 * @see DATAMONGO-1050
+	 */
+	@Test
+	public void annotatedIdFieldShouldExtractValueFromUnderscoreIdField() {
+
+		DBObject dbo = new BasicDBObjectBuilder().add("_id", "A").add("id", "B").get();
+
+		ClassWithAnnotatedIdField withAnnotatedIdField = converter.read(ClassWithAnnotatedIdField.class, dbo);
+
+		assertThat(withAnnotatedIdField.key, is("A"));
 	}
 
 	static class GenericType<T> {
@@ -2191,5 +2231,21 @@ public class MappingMongoConverterUnitTests {
 	static class ClassWithExplicitlyRenamedField {
 
 		@Field("id") String id;
+	}
+
+	static class RootForClassWithNamedIdField {
+
+		String id;
+		ClassWithNamedIdField nested;
+	}
+
+	static class ClassWithNamedIdField {
+
+		String id;
+	}
+
+	static class ClassWithAnnotatedIdField {
+
+		@Id String key;
 	}
 }
